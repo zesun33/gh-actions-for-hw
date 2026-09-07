@@ -1,0 +1,28 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.iml
+
+# Agent memory / local progress (never commit)
+MEMORY.md
+MEMORY.local.md
+.memory/
+*.memory.md
+*.local.md
+
+# CI-generated EDA artifacts
+*.vvp
+*.vcd
+*.fst
+sim_build/
+results.xml
+*_gate.v
+*_mapped.v
+routed.def
+rc_out.txt
+counter_sim

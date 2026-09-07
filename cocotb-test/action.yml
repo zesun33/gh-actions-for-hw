@@ -1,0 +1,61 @@
+name: "Cocotb test"
+description: "Run a Python cocotb testbench against a Verilog DUT and report pass/fail"
+author: "Md Zesun Ahmed Mia"
+
+inputs:
+  verilog-sources:
+    description: "Space-separated DUT Verilog files, relative to the workspace"
+    required: true
+  toplevel:
+    description: "Top-level DUT module name"
+    required: true
+  python-module:
+    description: "Python test module name (without .py)"
+    required: true
+  simulator:
+    description: "Cocotb SIM backend (icarus; verilator needs >= 5.036 in the image)"
+    required: false
+    default: "icarus"
+  timeout-minutes:
+    description: "Simulation timeout in minutes"
+    required: false
+    default: "10"
+  image:
+    description: "Container image with cocotb"
+    required: false
+    default: "ghcr.io/zesun33/verilog:latest"
+
+outputs:
+  tests:
+    description: "TESTS=PASS/FAIL/SKIP summary line from cocotb, if emitted"
+    value: ${{ steps.cocotb.outputs.tests }}
+
+runs:
+  using: composite
+  steps:
+    - name: Run cocotb regression
+      id: cocotb
+      shell: bash
+      run: |
+        set -o pipefail
+        cat > /tmp/Makefile.hw_ci <<EOF
+        SIM ?= ${{ inputs.simulator }}
+        TOPLEVEL_LANG ?= verilog
+        VERILOG_SOURCES ?= ${{ inputs.verilog-sources }}
+        TOPLEVEL = ${{ inputs.toplevel }}
+        MODULE = ${{ inputs.python-module }}
+        include \$$(shell cocotb-config --makefiles)/Makefile.sim
+        EOF
+        LOG=$(docker run --rm \
+          -v "${{ github.workspace }}:/workspace:Z" \
+          -w /workspace \
+          -e SIM="${{ inputs.simulator }}" \
+          -e TOPLEVEL_LANG=verilog \
+          -e MODULE="${{ inputs.python-module }}" \
+          -e TOPLEVEL="${{ inputs.toplevel }}" \
+          "${{ inputs.image }}" \
+          bash -c "timeout ${{ inputs.timeout-minutes }}m make -f /tmp/Makefile.hw_ci; rm -f /tmp/Makefile.hw_ci" 2>&1 | tee /dev/stderr)
+        SUMMARY=$(echo "$LOG" | grep -m1 -oE "TESTS=[0-9]+ PASS=[0-9]+ FAIL=[0-9]+ SKIP=[0-9]+" || true)
+        echo "tests=${SUMMARY:-unknown}" >> "$GITHUB_OUTPUT"
+        echo "$LOG" | grep -q "results.xml" || true
+        test -f sim_build/results.xml -o -f results.xml || { echo "::error::cocotb produced no results.xml"; exit 1; }

@@ -1,0 +1,91 @@
+name: "OpenROAD place and route"
+description: "Floorplan, place, route, and STA a gate-level netlist with OpenROAD (liberty-mapped netlists only)"
+author: "Md Zesun Ahmed Mia"
+
+inputs:
+  netlist:
+    description: "Gate-level Verilog netlist (liberty-mapped; generic expressions are unreadable)"
+    required: true
+  top-module:
+    description: "Top-level module name"
+    required: true
+  tech-lef:
+    description: "Technology LEF path (workspace-relative)"
+    required: true
+  macro-lef:
+    description: "Cell macro LEF path (workspace-relative)"
+    required: true
+  liberty-file:
+    description: "Liberty (.lib) path (workspace-relative)"
+    required: true
+  clock-period-ns:
+    description: "Target clock period in ns (used when sdc-file is empty)"
+    required: false
+    default: "2.0"
+  sdc-file:
+    description: "SDC constraints path (workspace-relative, optional)"
+    required: false
+    default: ""
+  utilization:
+    description: "Core utilization 0..1"
+    required: false
+    default: "0.4"
+  output-def:
+    description: "Output DEF path (workspace-relative)"
+    required: false
+    default: "routed.def"
+  image:
+    description: "Container image with OpenROAD"
+    required: false
+    default: "ghcr.io/zesun33/asic:latest"
+
+outputs:
+  wns:
+    description: "Worst negative slack in ns (0.0 when unparseable)"
+    value: ${{ steps.pnr.outputs.wns }}
+  def-file:
+    description: "Routed DEF path as requested"
+    value: ${{ inputs.output-def }}
+
+runs:
+  using: composite
+  steps:
+    - name: Place and route with OpenROAD
+      id: pnr
+      shell: bash
+      run: |
+        set -o pipefail
+        if [ -n "${{ inputs.sdc-file }}" ]; then
+          SDC='read_sdc "${{ inputs.sdc-file }}"'
+        else
+          SDC='create_clock -name core_clock -period ${{ inputs.clock-period-ns }} [lindex [all_inputs] 0]'
+        fi
+        cat > /tmp/hw_ci_pnr.tcl <<EOF
+        read_lef "${{ inputs.tech-lef }}"
+        read_lef "${{ inputs.macro-lef }}"
+        read_liberty "${{ inputs.liberty-file }}"
+        read_verilog "${{ inputs.netlist }}"
+        link_design "${{ inputs.top-module }}"
+        $SDC
+        initialize_floorplan -utilization ${{ inputs.utilization }} -aspect_ratio 1.0 -core_space 2.0
+        make_tracks
+        place_pins -hor_layer metal3 -ver_layer metal2
+        global_placement
+        detailed_placement
+        global_route
+        estimate_parasitics -placement
+        report_wns
+        report_tns
+        write_def "${{ inputs.output-def }}"
+        puts "PNR_COMPLETE"
+        EOF
+        LOG=$(docker run --rm \
+          -v "${{ github.workspace }}:/workspace:Z" \
+          -w /workspace \
+          -v /tmp/hw_ci_pnr.tcl:/tmp/hw_ci_pnr.tcl:ro,Z \
+          "${{ inputs.image }}" \
+          openroad -no_splash -exit /tmp/hw_ci_pnr.tcl 2>&1 | tee /dev/stderr)
+        echo "$LOG" | grep -q "PNR_COMPLETE" || { echo "::error::OpenROAD flow did not complete"; exit 1; }
+        test -s "${{ github.workspace }}/${{ inputs.output-def }}" || { echo "::error::routed DEF missing (design likely failed to link)"; exit 1; }
+        WNS=$(echo "$LOG" | grep -m1 -oiE "wns +(-?[0-9.]+)" | grep -oE -- "-?[0-9.]+" | head -n 1 || echo 0.0)
+        echo "wns=${WNS:-0.0}" >> "$GITHUB_OUTPUT"

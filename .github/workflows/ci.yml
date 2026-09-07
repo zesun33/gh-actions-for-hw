@@ -1,0 +1,143 @@
+# Self-test: every reusable action runs against fixtures (dogfooding).
+# PDK files (Nangate45) are fetched once from mcp-openroad at a pinned
+# commit so this repo stays free of 7MB binary-ish blobs.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PLAT_REF: 66b83c05c4af9c5cca82cb6e56d47e80ebd3e8ea
+  PLAT_BASE: https://raw.githubusercontent.com/zesun33/mcp-openroad
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint clean RTL (must pass)
+        uses: ./verilog-lint
+        with:
+          files: fixtures/counter.v
+      - name: Lint broken RTL (must fail)
+        id: negative
+        continue-on-error: true
+        uses: ./verilog-lint
+        with:
+          files: fixtures/syntax_error.v
+      - name: Assert the negative failed
+        if: steps.negative.outcome != 'failure'
+        run: echo "::error::syntax_error.v unexpectedly passed lint" && exit 1
+
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run counter testbench
+        uses: ./verilog-simulate
+        with:
+          files: fixtures/counter.v fixtures/counter_tb.v
+          top-module: counter_tb
+
+  synth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Nangate liberty (pinned)
+        run: |
+          curl -sL "$PLAT_BASE/$PLAT_REF/platforms/nangate45/NangateOpenCellLibrary_typical.lib" \
+            -o /tmp/nangate.lib
+          test -s /tmp/nangate.lib
+      - name: Generic synth
+        uses: ./yosys-synthesize
+        with:
+          files: fixtures/counter.v
+          top-module: counter
+          target: generic
+          output-netlist: counter_gate.v
+      - name: Liberty synth reports cells
+        id: synth
+        uses: ./yosys-synthesize
+        with:
+          files: fixtures/counter.v
+          top-module: counter
+          target: liberty
+          liberty-file: /tmp/nangate.lib
+      - name: Assert cell count output
+        if: steps.synth.outputs.cells == '0' || steps.synth.outputs.cells == ''
+        run: echo "::error::expected nonzero cell count" && exit 1
+
+  pnr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Nangate platform (pinned)
+        run: |
+          mkdir -p /tmp/pdk
+          for f in NangateOpenCellLibrary.tech.lef NangateOpenCellLibrary.macro.lef NangateOpenCellLibrary_typical.lib; do
+            curl -sL "$PLAT_BASE/$PLAT_REF/platforms/nangate45/$f" -o "/tmp/pdk/$f"
+          done
+          test -s /tmp/pdk/NangateOpenCellLibrary_typical.lib
+      - name: Synth mapped netlist
+        uses: ./yosys-synthesize
+        with:
+          files: fixtures/counter.v
+          top-module: counter
+          target: liberty
+          liberty-file: /tmp/pdk/NangateOpenCellLibrary_typical.lib
+          output-netlist: counter_mapped.v
+      - name: Place and route
+        id: pnr
+        uses: ./openroad-pnr
+        with:
+          netlist: counter_mapped.v
+          top-module: counter
+          tech-lef: /tmp/pdk/NangateOpenCellLibrary.tech.lef
+          macro-lef: /tmp/pdk/NangateOpenCellLibrary.macro.lef
+          liberty-file: /tmp/pdk/NangateOpenCellLibrary_typical.lib
+          clock-period-ns: "2.0"
+          utilization: "0.4"
+          output-def: routed.def
+      - name: Assert timing and artifact
+        run: |
+          test -s routed.def || { echo "::error::routed.def missing"; exit 1; }
+          echo "WNS=${{ steps.pnr.outputs.wns }}"
+
+  cocotb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run DFF regression
+        id: tb
+        uses: ./cocotb-test
+        with:
+          verilog-sources: fixtures/dff.v
+          toplevel: dff
+          python-module: test_dff
+      - name: Show summary
+        run: echo "${{ steps.tb.outputs.tests }}"
+
+  spice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run RC filter
+        uses: ./spice-simulate
+        with:
+          netlist: fixtures/rc_filter.cir
+      - name: Assert waveform data
+        run: test -s rc_out.txt || { echo "::error::rc_out.txt missing"; exit 1; }

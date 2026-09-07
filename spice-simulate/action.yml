@@ -1,0 +1,28 @@
+name: "SPICE simulate"
+description: "Run a transient/operating-point SPICE simulation with ngspice in batch mode"
+author: "Md Zesun Ahmed Mia"
+
+inputs:
+  netlist:
+    description: "SPICE netlist path, relative to the workspace"
+    required: true
+  timeout-minutes:
+    description: "Simulation timeout in minutes"
+    required: false
+    default: "5"
+  image:
+    description: "Container image with ngspice"
+    required: false
+    default: "ghcr.io/zesun33/spice:latest"
+
+runs:
+  using: composite
+  steps:
+    - name: Simulate with ngspice
+      shell: bash
+      run: |
+        docker run --rm \
+          -v "${{ github.workspace }}:/workspace:Z" \
+          -w /workspace \
+          "${{ inputs.image }}" \
+          bash -c "timeout ${{ inputs.timeout-minutes }}m ngspice -b ${{ inputs.netlist }}"

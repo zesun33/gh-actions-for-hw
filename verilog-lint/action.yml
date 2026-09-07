@@ -1,0 +1,32 @@
+name: "Verilog lint"
+description: "Lint Verilog/SystemVerilog with verible-verilog-lint (like actions/setup-python for hardware)"
+author: "Md Zesun Ahmed Mia"
+
+inputs:
+  files:
+    description: "Space-separated Verilog source files, relative to the workspace"
+    required: true
+  ruleset:
+    description: "Verible ruleset (e.g. default, all)"
+    required: false
+    default: ""
+  image:
+    description: "Container image with the Verilog toolchain"
+    required: false
+    default: "ghcr.io/zesun33/verilog:latest"
+
+runs:
+  using: composite
+  steps:
+    - name: Lint with verible
+      shell: bash
+      run: |
+        ARGS=""
+        if [ -n "${{ inputs.ruleset }}" ]; then
+          ARGS="--ruleset=${{ inputs.ruleset }}"
+        fi
+        docker run --rm \
+          -v "${{ github.workspace }}:/workspace:Z" \
+          -w /workspace \
+          "${{ inputs.image }}" \
+          verible-verilog-lint $ARGS ${{ inputs.files }}

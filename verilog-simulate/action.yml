@@ -1,0 +1,36 @@
+name: "Verilog simulate"
+description: "Compile and run a Verilog testbench with Icarus Verilog, failing on $fatal assertions"
+author: "Md Zesun Ahmed Mia"
+
+inputs:
+  files:
+    description: "Space-separated design + testbench files, relative to the workspace"
+    required: true
+  top-module:
+    description: "Top-level testbench module for elaboration (-s)"
+    required: false
+    default: ""
+  timeout-minutes:
+    description: "Simulation timeout in minutes (wraps timeout(1))"
+    required: false
+    default: "5"
+  image:
+    description: "Container image with the Verilog toolchain"
+    required: false
+    default: "ghcr.io/zesun33/verilog:latest"
+
+runs:
+  using: composite
+  steps:
+    - name: Simulate with iverilog + vvp
+      shell: bash
+      run: |
+        TOP=""
+        if [ -n "${{ inputs.top-module }}" ]; then
+          TOP="-s ${{ inputs.top-module }}"
+        fi
+        docker run --rm \
+          -v "${{ github.workspace }}:/workspace:Z" \
+          -w /workspace \
+          "${{ inputs.image }}" \
+          bash -c "iverilog -o /tmp/hw_ci_sim.vvp $TOP ${{ inputs.files }} && timeout ${{ inputs.timeout-minutes }}m vvp /tmp/hw_ci_sim.vvp"

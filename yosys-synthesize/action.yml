@@ -1,0 +1,63 @@
+name: "Yosys synthesize"
+description: "Synthesize RTL with Yosys and report gate counts (generic, ice40, or liberty-mapped)"
+author: "Md Zesun Ahmed Mia"
+
+inputs:
+  files:
+    description: "Space-separated Verilog source files, relative to the workspace"
+    required: true
+  top-module:
+    description: "Top-level module to synthesize"
+    required: true
+  target:
+    description: "Synthesis target: generic, ice40, or liberty"
+    required: false
+    default: "generic"
+  liberty-file:
+    description: "Liberty (.lib) path for target=liberty (workspace-relative)"
+    required: false
+    default: ""
+  output-netlist:
+    description: "Write the gate-level netlist here (workspace-relative, optional)"
+    required: false
+    default: ""
+  image:
+    description: "Container image with Yosys"
+    required: false
+    default: "ghcr.io/zesun33/asic:latest"
+
+outputs:
+  cells:
+    description: "Total gate count from stat"
+    value: ${{ steps.synth.outputs.cells }}
+
+runs:
+  using: composite
+  steps:
+    - name: Synthesize with Yosys
+      id: synth
+      shell: bash
+      run: |
+        set -o pipefail
+        case "${{ inputs.target }}" in
+          generic) SYNTH="synth -top ${{ inputs.top-module }}" ;;
+          ice40) SYNTH="synth_ice40 -top ${{ inputs.top-module }}" ;;
+          liberty)
+            if [ -z "${{ inputs.liberty-file }}" ]; then
+              echo "::error::target=liberty needs liberty-file"; exit 1
+            fi
+            SYNTH="synth -top ${{ inputs.top-module }}; dfflibmap -liberty ${{ inputs.liberty-file }}; abc -liberty ${{ inputs.liberty-file }}; clean"
+            ;;
+          *) echo "::error::unknown target '${{ inputs.target }}' (generic|ice40|liberty)"; exit 1 ;;
+        esac
+        OUT=""
+        if [ -n "${{ inputs.output-netlist }}" ]; then
+          OUT="; write_verilog -noattr ${{ inputs.output-netlist }}"
+        fi
+        LOG=$(docker run --rm \
+          -v "${{ github.workspace }}:/workspace:Z" \
+          -w /workspace \
+          "${{ inputs.image }}" \
+          yosys -p "read_verilog -sv ${{ inputs.files }}; hierarchy -check -top ${{ inputs.top-module }}; $SYNTH; stat$OUT" 2>&1 | tee /dev/stderr)
+        CELLS=$(echo "$LOG" | grep -m1 -oE "Number of cells:[[:space:]]+[0-9]+" | grep -oE "[0-9]+" || echo 0)
+        echo "cells=$CELLS" >> "$GITHUB_OUTPUT"
