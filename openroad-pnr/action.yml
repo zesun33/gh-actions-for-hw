@@ -60,7 +60,9 @@ runs:
         else
           SDC='create_clock -name core_clock -period ${{ inputs.clock-period-ns }} [lindex [all_inputs] 0]'
         fi
-        cat > /tmp/hw_ci_pnr.tcl <<'EOF'
+        # Deliberately UNQUOTED heredoc: $SDC must expand here. Keep all
+        # Tcl $variables out of the template (bake values instead).
+        cat > /tmp/hw_ci_pnr.tcl <<EOF
         read_lef "${{ inputs.tech-lef }}"
         read_lef "${{ inputs.macro-lef }}"
         read_liberty "${{ inputs.liberty-file }}"
