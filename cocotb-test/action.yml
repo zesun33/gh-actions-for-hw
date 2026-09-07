@@ -59,7 +59,9 @@ runs:
         set -o pipefail
         # MAKEFILES is a host-shell value baked below: make runs inside the
         # container, which never sees the runner environment.
-        cat > .hw_ci_cocotb.mk <<'EOF'
+        # Absolute path: this step may run under working-directory while the
+        # file was created wherever the previous step ran.
+        cat > "${{ github.workspace }}/.hw_ci_cocotb.mk" <<'EOF'
         SIM ?= ${{ inputs.simulator }}
         TOPLEVEL_LANG ?= verilog
         VERILOG_SOURCES ?= ${{ inputs.verilog-sources }}
@@ -75,7 +77,7 @@ runs:
           -e MODULE="${{ inputs.python-module }}" \
           -e TOPLEVEL="${{ inputs.toplevel }}" \
           "${{ inputs.image }}" \
-          bash -c "timeout ${{ inputs.timeout-minutes }}m make -f .hw_ci_cocotb.mk; rm -f .hw_ci_cocotb.mk" 2>&1 | tee /dev/stderr)
+          bash -c "timeout ${{ inputs.timeout-minutes }}m make -f ${{ github.workspace }}/.hw_ci_cocotb.mk; rm -f ${{ github.workspace }}/.hw_ci_cocotb.mk" 2>&1 | tee /dev/stderr)
         SUMMARY=$(echo "$LOG" | grep -m1 -oE "TESTS=[0-9]+ PASS=[0-9]+ FAIL=[0-9]+ SKIP=[0-9]+" || true)
         echo "tests=${SUMMARY:-unknown}" >> "$GITHUB_OUTPUT"
         echo "$LOG" | grep -q "results.xml" || true
