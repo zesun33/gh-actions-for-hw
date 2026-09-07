@@ -53,22 +53,31 @@ runs:
       id: cocotb
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      # NOTE: the Makefile must live INSIDE the workspace: only it is
-      # mounted into the container, so host /tmp paths are unreachable.
+      # Paths: only github.workspace is mounted (at /workspace), so every
+      # container-side path is workspace-relative; host-side writes use the
+      # absolute workspace path. DUT sources resolve under working-directory.
       run: |
         set -o pipefail
-        # MAKEFILES is a host-shell value baked below: make runs inside the
-        # container, which never sees the runner environment.
-        # Absolute path: this step may run under working-directory while the
-        # file was created wherever the previous step ran.
-        cat > "${{ github.workspace }}/.hw_ci_cocotb.mk" <<'EOF'
+        MK="${{ github.workspace }}/.hw_ci_cocotb.mk"
+        SRC=""
+        for f in ${{ inputs.verilog-sources }}; do
+          case "$f" in
+            /*) SRC="$SRC $f" ;;
+            *) SRC="$SRC ${{ inputs.working-directory }}/$f" ;;
+          esac
+        done
+        PYPP=""
+        if [ "${{ inputs.working-directory }}" != "." ]; then
+          PYPP="-e PYTHONPATH=/workspace/${{ inputs.working-directory }}"
+        fi
+        cat > "$MK" <<'EOF'
         SIM ?= ${{ inputs.simulator }}
         TOPLEVEL_LANG ?= verilog
-        VERILOG_SOURCES ?= ${{ inputs.verilog-sources }}
         TOPLEVEL = ${{ inputs.toplevel }}
         MODULE = ${{ inputs.python-module }}
         EOF
-        echo "include $MAKEFILES/Makefile.sim" >> "${{ github.workspace }}/.hw_ci_cocotb.mk"
+        echo "VERILOG_SOURCES ?= $SRC" >> "$MK"
+        echo "include $MAKEFILES/Makefile.sim" >> "$MK"
         LOG=$(docker run --rm \
           -v "${{ github.workspace }}:/workspace:Z" \
           -w /workspace \
@@ -76,9 +85,10 @@ runs:
           -e TOPLEVEL_LANG=verilog \
           -e MODULE="${{ inputs.python-module }}" \
           -e TOPLEVEL="${{ inputs.toplevel }}" \
+          $PYPP \
           "${{ inputs.image }}" \
-          bash -c "timeout ${{ inputs.timeout-minutes }}m make -f ${{ github.workspace }}/.hw_ci_cocotb.mk; rm -f ${{ github.workspace }}/.hw_ci_cocotb.mk" 2>&1 | tee /dev/stderr)
+          bash -c "timeout ${{ inputs.timeout-minutes }}m make -f .hw_ci_cocotb.mk; rm -f .hw_ci_cocotb.mk" 2>&1 | tee /dev/stderr)
         SUMMARY=$(echo "$LOG" | grep -m1 -oE "TESTS=[0-9]+ PASS=[0-9]+ FAIL=[0-9]+ SKIP=[0-9]+" || true)
         echo "tests=${SUMMARY:-unknown}" >> "$GITHUB_OUTPUT"
         echo "$LOG" | grep -q "results.xml" || true
-        test -f sim_build/results.xml -o -f results.xml || { echo "::error::cocotb produced no results.xml"; exit 1; }
+        test -f "${{ github.workspace }}/sim_build/results.xml" -o -f "${{ github.workspace }}/results.xml" || { echo "::error::cocotb produced no results.xml"; exit 1; }
