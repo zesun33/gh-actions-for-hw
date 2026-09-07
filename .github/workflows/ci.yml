@@ -57,8 +57,8 @@ jobs:
       - name: Fetch Nangate liberty (pinned)
         run: |
           curl -sL "$PLAT_BASE/$PLAT_REF/platforms/nangate45/NangateOpenCellLibrary_typical.lib" \
-            -o /tmp/nangate.lib
-          test -s /tmp/nangate.lib
+            -o pdk/nangate.lib
+          test -s pdk/nangate.lib
       - name: Generic synth
         uses: ./yosys-synthesize
         with:
@@ -73,7 +73,7 @@ jobs:
           files: fixtures/counter.v
           top-module: counter
           target: liberty
-          liberty-file: /tmp/nangate.lib
+          liberty-file: pdk/nangate.lib
       - name: Assert cell count output
         if: steps.synth.outputs.cells == '0' || steps.synth.outputs.cells == ''
         run: echo "::error::expected nonzero cell count" && exit 1
@@ -85,18 +85,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fetch Nangate platform (pinned)
         run: |
-          mkdir -p /tmp/pdk
+          mkdir -p pdk
           for f in NangateOpenCellLibrary.tech.lef NangateOpenCellLibrary.macro.lef NangateOpenCellLibrary_typical.lib; do
-            curl -sL "$PLAT_BASE/$PLAT_REF/platforms/nangate45/$f" -o "/tmp/pdk/$f"
+            curl -sL "$PLAT_BASE/$PLAT_REF/platforms/nangate45/$f" -o "pdk/$f"
           done
-          test -s /tmp/pdk/NangateOpenCellLibrary_typical.lib
+          test -s pdk/NangateOpenCellLibrary_typical.lib
       - name: Synth mapped netlist
         uses: ./yosys-synthesize
         with:
           files: fixtures/counter.v
           top-module: counter
           target: liberty
-          liberty-file: /tmp/pdk/NangateOpenCellLibrary_typical.lib
+          liberty-file: pdk/NangateOpenCellLibrary_typical.lib
           output-netlist: counter_mapped.v
       - name: Place and route
         id: pnr
@@ -104,9 +104,9 @@ jobs:
         with:
           netlist: counter_mapped.v
           top-module: counter
-          tech-lef: /tmp/pdk/NangateOpenCellLibrary.tech.lef
-          macro-lef: /tmp/pdk/NangateOpenCellLibrary.macro.lef
-          liberty-file: /tmp/pdk/NangateOpenCellLibrary_typical.lib
+          tech-lef: pdk/NangateOpenCellLibrary.tech.lef
+          macro-lef: pdk/NangateOpenCellLibrary.macro.lef
+          liberty-file: pdk/NangateOpenCellLibrary_typical.lib
           clock-period-ns: "2.0"
           utilization: "0.4"
           output-def: routed.def

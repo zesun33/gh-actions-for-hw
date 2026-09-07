@@ -15,7 +15,10 @@ MEMORY.local.md
 *.memory.md
 *.local.md
 
-# CI-generated EDA artifacts
+# CI-generated EDA artifacts (and the PDK download cache)
+pdk/
+.hw_ci_cocotb.mk
+Makefile.hw_ci
 *.vvp
 *.vcd
 *.fst

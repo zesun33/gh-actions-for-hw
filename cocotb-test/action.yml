@@ -36,9 +36,11 @@ runs:
     - name: Run cocotb regression
       id: cocotb
       shell: bash
+      # NOTE: the Makefile must live INSIDE the workspace: only it is
+      # mounted into the container, so host /tmp paths are unreachable.
       run: |
         set -o pipefail
-        cat > /tmp/Makefile.hw_ci <<EOF
+        cat > .hw_ci_cocotb.mk <<EOF
         SIM ?= ${{ inputs.simulator }}
         TOPLEVEL_LANG ?= verilog
         VERILOG_SOURCES ?= ${{ inputs.verilog-sources }}
@@ -54,7 +56,7 @@ runs:
           -e MODULE="${{ inputs.python-module }}" \
           -e TOPLEVEL="${{ inputs.toplevel }}" \
           "${{ inputs.image }}" \
-          bash -c "timeout ${{ inputs.timeout-minutes }}m make -f /tmp/Makefile.hw_ci; rm -f /tmp/Makefile.hw_ci" 2>&1 | tee /dev/stderr)
+          bash -c "timeout ${{ inputs.timeout-minutes }}m make -f .hw_ci_cocotb.mk; rm -f .hw_ci_cocotb.mk" 2>&1 | tee /dev/stderr)
         SUMMARY=$(echo "$LOG" | grep -m1 -oE "TESTS=[0-9]+ PASS=[0-9]+ FAIL=[0-9]+ SKIP=[0-9]+" || true)
         echo "tests=${SUMMARY:-unknown}" >> "$GITHUB_OUTPUT"
         echo "$LOG" | grep -q "results.xml" || true

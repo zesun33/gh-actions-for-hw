@@ -59,6 +59,8 @@ jobs:
 
 ## Notes and limits
 
+- **All file inputs must live inside the workspace.** Only `github.workspace` is mounted into the containers; absolute host paths such as `/tmp/x.lib` are unreachable from the tools. Download PDK data into the workspace (e.g. `pdk/`) first.
+
 - **P&R needs liberty-mapped netlists.** Generic (operator-expression) netlists are unreadable to OpenROAD; synthesize with `target: liberty` first. The action fails loudly (missing DEF) instead of reporting vacuous success.
 - **PDK files are caller-supplied.** The actions ship no foundry data; [`mcp-openroad/platforms`](https://github.com/zesun33/mcp-openroad/tree/main/platforms) hosts the Nangate45 set this repo's CI pins for self-tests.
 - **Cocotb Verilator path** needs Verilator ≥ 5.036 in the image; default `simulator: icarus` works everywhere.
