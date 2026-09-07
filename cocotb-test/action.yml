@@ -52,14 +52,16 @@ runs:
       # mounted into the container, so host /tmp paths are unreachable.
       run: |
         set -o pipefail
+        # MAKEFILES is a host-shell value baked below: make runs inside the
+        # container, which never sees the runner environment.
         cat > .hw_ci_cocotb.mk <<'EOF'
         SIM ?= ${{ inputs.simulator }}
         TOPLEVEL_LANG ?= verilog
         VERILOG_SOURCES ?= ${{ inputs.verilog-sources }}
         TOPLEVEL = ${{ inputs.toplevel }}
         MODULE = ${{ inputs.python-module }}
-        include ${MAKEFILES}/Makefile.sim
         EOF
+        echo "include $MAKEFILES/Makefile.sim" >> .hw_ci_cocotb.mk
         LOG=$(docker run --rm \
           -v "${{ github.workspace }}:/workspace:Z" \
           -w /workspace \
