@@ -68,7 +68,7 @@ runs:
         TOPLEVEL = ${{ inputs.toplevel }}
         MODULE = ${{ inputs.python-module }}
         EOF
-        echo "include $MAKEFILES/Makefile.sim" >> .hw_ci_cocotb.mk
+        echo "include $MAKEFILES/Makefile.sim" >> "${{ github.workspace }}/.hw_ci_cocotb.mk"
         LOG=$(docker run --rm \
           -v "${{ github.workspace }}:/workspace:Z" \
           -w /workspace \
