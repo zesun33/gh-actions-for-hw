@@ -64,8 +64,9 @@ runs:
         else
           SDC='create_clock -name core_clock -period ${{ inputs.clock-period-ns }} [lindex [all_inputs] 0]'
         fi
-        # Deliberately UNQUOTED heredoc: $SDC must expand here. Keep all
-        # Tcl $variables out of the template (bake values instead).
+        UTIL_PCT=$(python3 -c "print(round(float('${{ inputs.utilization }}') * 100))")
+        # Deliberately UNQUOTED heredoc: $SDC/$UTIL_PCT must expand here.
+        # Keep all other Tcl $variables out of the template (bake values).
         cat > /tmp/hw_ci_pnr.tcl <<EOF
         read_lef "${{ inputs.tech-lef }}"
         read_lef "${{ inputs.macro-lef }}"
@@ -73,7 +74,6 @@ runs:
         read_verilog "${{ inputs.netlist }}"
         link_design "${{ inputs.top-module }}"
         $SDC
-        UTIL_PCT=$(python3 -c "print(round(float('${{ inputs.utilization }}') * 100))")
         initialize_floorplan -site "${{ inputs.site-name }}" -utilization $UTIL_PCT -aspect_ratio 1.0 -core_space 2.0
         make_tracks
         place_pins -hor_layer metal3 -ver_layer metal2
