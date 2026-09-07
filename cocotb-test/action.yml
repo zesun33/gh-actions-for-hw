@@ -33,6 +33,18 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Resolve cocotb makefiles dir (fail fast with diagnostics)
+      shell: bash
+      run: |
+        set -o pipefail
+        MAKEFILES=$(docker run --rm "${{ inputs.image }}" cocotb-config --makefiles 2>&1 | tee /dev/stderr | tail -n 1)
+        if [ -z "$MAKEFILES" ]; then
+          echo "::error::cocotb-config --makefiles empty in ${{ inputs.image }}"
+          exit 1
+        fi
+        docker run --rm "${{ inputs.image }}" test -d "$MAKEFILES" || { echo "::error::makefiles dir missing: $MAKEFILES"; exit 1; }
+        echo "MAKEFILES=$MAKEFILES" >> "$GITHUB_ENV"
+
     - name: Run cocotb regression
       id: cocotb
       shell: bash
@@ -40,13 +52,13 @@ runs:
       # mounted into the container, so host /tmp paths are unreachable.
       run: |
         set -o pipefail
-        cat > .hw_ci_cocotb.mk <<EOF
+        cat > .hw_ci_cocotb.mk <<'EOF'
         SIM ?= ${{ inputs.simulator }}
         TOPLEVEL_LANG ?= verilog
         VERILOG_SOURCES ?= ${{ inputs.verilog-sources }}
         TOPLEVEL = ${{ inputs.toplevel }}
         MODULE = ${{ inputs.python-module }}
-        include \$$(shell cocotb-config --makefiles)/Makefile.sim
+        include ${MAKEFILES}/Makefile.sim
         EOF
         LOG=$(docker run --rm \
           -v "${{ github.workspace }}:/workspace:Z" \
