@@ -27,9 +27,13 @@ inputs:
     required: false
     default: ""
   utilization:
-    description: "Core utilization 0..1"
+    description: "Core utilization fraction 0..1 (converted to percent for OpenROAD)"
     required: false
     default: "0.4"
+  site-name:
+    description: "Placement site name from the tech LEF (Nangate45 default)"
+    required: false
+    default: "FreePDK45_38x28_10R_NP_162NW_34O"
   output-def:
     description: "Output DEF path (workspace-relative)"
     required: false
@@ -69,7 +73,8 @@ runs:
         read_verilog "${{ inputs.netlist }}"
         link_design "${{ inputs.top-module }}"
         $SDC
-        initialize_floorplan -utilization ${{ inputs.utilization }} -aspect_ratio 1.0 -core_space 2.0
+        UTIL_PCT=$(python3 -c "print(round(float('${{ inputs.utilization }}') * 100))")
+        initialize_floorplan -site "${{ inputs.site-name }}" -utilization $UTIL_PCT -aspect_ratio 1.0 -core_space 2.0
         make_tracks
         place_pins -hor_layer metal3 -ver_layer metal2
         global_placement

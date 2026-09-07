@@ -20,6 +20,10 @@ inputs:
     description: "Simulation timeout in minutes"
     required: false
     default: "10"
+  working-directory:
+    description: "Subdirectory to run in (DUT sources and the Python module resolve here)"
+    required: false
+    default: "."
   image:
     description: "Container image with cocotb"
     required: false
@@ -48,6 +52,7 @@ runs:
     - name: Run cocotb regression
       id: cocotb
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       # NOTE: the Makefile must live INSIDE the workspace: only it is
       # mounted into the container, so host /tmp paths are unreachable.
       run: |

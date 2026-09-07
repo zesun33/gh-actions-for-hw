@@ -27,7 +27,7 @@ jobs:
       - name: Lint clean RTL (must pass)
         uses: ./verilog-lint
         with:
-          files: fixtures/counter.v
+          files: fixtures/clean.v
       - name: Lint broken RTL (must fail)
         id: negative
         continue-on-error: true
@@ -56,6 +56,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fetch Nangate liberty (pinned)
         run: |
+          mkdir -p pdk
           curl -sL "$PLAT_BASE/$PLAT_REF/platforms/nangate45/NangateOpenCellLibrary_typical.lib" \
             -o pdk/nangate.lib
           test -s pdk/nangate.lib
@@ -124,9 +125,10 @@ jobs:
         id: tb
         uses: ./cocotb-test
         with:
-          verilog-sources: fixtures/dff.v
+          verilog-sources: dff.v
           toplevel: dff
           python-module: test_dff
+          working-directory: fixtures
       - name: Show summary
         run: echo "${{ steps.tb.outputs.tests }}"
 
