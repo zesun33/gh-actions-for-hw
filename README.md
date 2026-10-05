@@ -1,5 +1,26 @@
 # gh-actions-for-hw
 
+<!-- BEGIN GENERATED PROJECT GUIDE -->
+
+## Purpose and first steps
+
+Run hardware checks through reusable GitHub Actions.
+
+**Who it is for:** Repository maintainers adding hardware checks to GitHub CI.
+
+**First task:** Copy the Verilog simulation action usage into a workflow for your RTL and testbench.
+
+**What to expect:** A CI job that executes the selected EDA check and reports failure to GitHub.
+
+**Current scope:** Six composite actions backed by container images. Simulation, synthesis, and physical-design checks have different inputs and prerequisites.
+
+**Start here:** [Workflow usage](README.md#usage).
+
+**Related projects:** [eda-docker-images](https://github.com/zesun33/eda-docker-images), [mcp-verilog](https://github.com/zesun33/mcp-verilog).
+
+[Choose another project](https://github.com/zesun33/personal-projects/blob/main/GETTING_STARTED.md).
+<!-- END GENERATED PROJECT GUIDE -->
+
 > Reusable GitHub Actions for hardware CI — the `actions/setup-python` equivalent for RTL-to-GDS flows.
 
 [![CI](https://github.com/zesun33/gh-actions-for-hw/actions/workflows/ci.yml/badge.svg)](https://github.com/zesun33/gh-actions-for-hw/actions/workflows/ci.yml)
