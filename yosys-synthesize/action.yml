@@ -28,7 +28,7 @@ inputs:
 
 outputs:
   cells:
-    description: "Total gate count from stat"
+    description: "Total gate count from the final stat report"
     value: ${{ steps.synth.outputs.cells }}
 
 runs:
@@ -59,5 +59,5 @@ runs:
           -w /workspace \
           "${{ inputs.image }}" \
           yosys -p "read_verilog -sv ${{ inputs.files }}; hierarchy -check -top ${{ inputs.top-module }}; $SYNTH; stat$OUT" 2>&1 | tee /dev/stderr)
-        CELLS=$(echo "$LOG" | grep -m1 -oE "Number of cells:[[:space:]]+[0-9]+" | grep -oE "[0-9]+" || echo 0)
+        CELLS=$(printf '%s\n' "$LOG" | awk '/Number of cells:[[:space:]]+[0-9]+/ { count=$NF } END { print count+0 }')
         echo "cells=$CELLS" >> "$GITHUB_OUTPUT"
